@@ -44,6 +44,16 @@ def _doc_from_file(path):
     return doc
 
 
+def _definition_from_jsonschema(module, name):
+    """Resolve the definition if referenced as import."""
+    try:
+        ref = __import__(module, globals(), locals(), [name], 0)
+        return getattr(ref, name)
+    except Exception:
+        pass
+    return None
+
+
 def _parse_docstring(obj, process_doc, from_file_keyword):
     first_line, other_lines, swag = None, None, None
     full_doc = inspect.getdoc(obj)
@@ -57,12 +67,12 @@ def _parse_docstring(obj, process_doc, from_file_keyword):
         line_feed = full_doc.find('\n')
         if line_feed != -1:
             first_line = process_doc(full_doc[:line_feed])
-            yaml_sep = full_doc[line_feed+1:].find('---')
+            yaml_sep = full_doc[line_feed + 1:].find('---')
             if yaml_sep != -1:
-                other_lines = process_doc(full_doc[line_feed+1:line_feed+yaml_sep])
-                swag = yaml.load(full_doc[line_feed+yaml_sep:])
+                other_lines = process_doc(full_doc[line_feed + 1:line_feed + yaml_sep])
+                swag = yaml.load(full_doc[line_feed + yaml_sep:])
             else:
-                other_lines = process_doc(full_doc[line_feed+1:])
+                other_lines = process_doc(full_doc[line_feed + 1:])
         else:
             first_line = full_doc
     return first_line, other_lines, swag
@@ -82,7 +92,7 @@ def _extract_definitions(alist, level=None):
         ret = []
         items = source.get('items')
         if items is not None and 'schema' in items:
-            ret += _extract_definitions([items], level+1)
+            ret += _extract_definitions([items], level + 1)
         return ret
 
     # for tracking level of recursion
@@ -93,6 +103,27 @@ def _extract_definitions(alist, level=None):
     if alist is not None:
         for item in alist:
             schema = item.get("schema")
+            if (schema is not None and
+                    schema.get("$ref") is not None and
+                    "import/" in schema.get("$ref")):
+                ref = schema.get("$ref")
+                # resolve local reference to python object
+                # "#/import:timeline.models.user.UserObject"
+                # process the import line
+                module_path = ref.split("import/")[1]
+                parts = module_path.split('.')
+                module = '.'.join(parts[:-1])
+                name = parts[-1]
+
+                # Point the ref to definitions
+                schema['$ref'] = "#/definitions/{}".format(module_path)
+
+                # Get the definition
+                definition = _definition_from_jsonschema(module, name)
+                # overrwrite the id with something good
+                definition['id'] = module_path
+
+                return [definition]
             if schema is not None:
                 schema_id = schema.get("id")
                 if schema_id is not None:
