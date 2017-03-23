@@ -46,12 +46,9 @@ def _doc_from_file(path):
 
 def _definition_from_jsonschema(module, name):
     """Resolve the definition if referenced as import."""
-    try:
-        ref = __import__(module, globals(), locals(), [name], 0)
-        return getattr(ref, name)
-    except Exception:
-        pass
-    return None
+
+    ref = __import__(module, globals(), locals(), [name], 0)
+    return getattr(ref, name)
 
 
 def _parse_docstring(obj, process_doc, from_file_keyword):
