@@ -47,7 +47,7 @@ def run():
         print(json.dumps(spec, indent=4))
     else:
         with open("%s/swagger.json" % args.out_dir, 'w') as f:
-            f.write(json.dumps(spec, indent=4))
+            f.write(json.dumps(spec, indent=4, sort_keys=True))
             f.close()
 
 run()
