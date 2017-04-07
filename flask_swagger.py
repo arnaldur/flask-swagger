@@ -176,6 +176,7 @@ def swagger(app, prefix=None, process_doc=_sanitize,
             "title": "Cool product name",
         }
     }
+
     paths = defaultdict(dict)
     definitions = defaultdict(dict)
     if template is not None:
