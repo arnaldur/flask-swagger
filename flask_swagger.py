@@ -261,7 +261,7 @@ def swagger(app,
                 if responses is not None:
                     defs = defs + _extract_definitions(responses.values())
                 for definition in defs:
-                    def_id = definition.pop('id')
+                    def_id = definition.pop('id', None)
                     if def_id is not None:
                         definitions[def_id].update(definition)
                 operation = dict(
