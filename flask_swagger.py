@@ -13,6 +13,12 @@ import re
 from collections import defaultdict
 
 
+IGNORE_VERBS = {"HEAD", "OPTIONS"}
+# technically only responses is non-optional
+OPTIONAL_FIELDS = ['tags', 'consumes', 'produces', 'schemes', 'security',
+                   'deprecated', 'operationId', 'externalDocs']
+
+
 def _sanitize(comment):
     return comment.replace('\n', '<br/>') if comment else comment
 
@@ -66,7 +72,9 @@ def _parse_docstring(obj, process_doc, from_file_keyword):
             first_line = process_doc(full_doc[:line_feed])
             yaml_sep = full_doc[line_feed + 1:].find('---')
             if yaml_sep != -1:
-                other_lines = process_doc(full_doc[line_feed + 1:line_feed + yaml_sep])
+                other_lines = process_doc(
+                    full_doc[line_feed + 1:line_feed + yaml_sep]
+                )
                 swag = yaml.load(full_doc[line_feed + yaml_sep:])
             else:
                 other_lines = process_doc(full_doc[line_feed + 1:])
@@ -127,9 +135,10 @@ def _extract_definitions(alist, level=None):
                     defs.append(schema)
                     ref = {"$ref": "#/definitions/{}".format(schema_id)}
 
-                    # only add the reference as a schema if we are in a response or
-                    # a parameter i.e. at the top level
-                    # directly ref if a definition is used within another definition
+                    # only add the reference as a schema if we are in a
+                    # response or a parameter i.e. at the top level
+                    # directly ref if a definition is used within another
+                    # definition
                     if level == 0:
                         item['schema'] = ref
                     else:
@@ -140,7 +149,8 @@ def _extract_definitions(alist, level=None):
                 # this occurs recursively
                 properties = schema.get('properties')
                 if properties is not None:
-                    defs += _extract_definitions(properties.values(), level+1)
+                    defs += _extract_definitions(properties.values(),
+                                                 level + 1)
 
                 defs += _extract_array_defs(schema)
 
@@ -149,8 +159,46 @@ def _extract_definitions(alist, level=None):
     return defs
 
 
-def swagger(app, prefix=None, process_doc=_sanitize,
-            from_file_keyword=None, template=None):
+def flask_url_parser(app, prefix=None):
+    """
+    Walk the url definitions in the app and extract all functions
+    handling urls.
+    """
+    urldict = defaultdict(list)
+    for rule in app.url_map.iter_rules():
+        url = str(rule)
+        if prefix and rule.rule[:len(prefix)] != prefix:
+            continue
+        endpoint = app.view_functions[rule.endpoint]
+        for verb in rule.methods.difference(IGNORE_VERBS):
+            verb = verb.lower()
+            if hasattr(endpoint, 'methods') \
+                    and verb in map(lambda m: m.lower(), endpoint.methods) \
+                    and hasattr(endpoint.view_class, verb):
+                urldict[url].append((verb, getattr(endpoint.view_class, verb)))
+            else:
+                urldict[url].append((verb, endpoint))
+
+    return urldict
+
+
+def flask_rule_parser(rule):
+    """
+    Parse the flask url params to swagger spec urls
+    """
+    rule = str(rule)
+    for arg in re.findall('(<([^<>]*:)?([^<>]*)>)', rule):
+        rule = rule.replace(arg[0], '{%s}' % arg[2])
+    return rule
+
+
+def swagger(app,
+            url_parser=flask_url_parser,
+            rule_parser=flask_rule_parser,
+            process_doc=_sanitize,
+            prefix=None,
+            from_file_keyword=None,
+            template=None):
     """
     Call this from an @app.route method like this
     @app.route('/spec.json')
@@ -165,7 +213,8 @@ def swagger(app, prefix=None, process_doc=_sanitize,
     app -- the flask app to inspect
 
     Keyword arguments:
-    process_doc -- text sanitization method, the default simply replaces \n with <br>
+    process_doc -- text sanitization method, the default simply
+                   replaces \n with <br>
     from_file_keyword -- how to specify a file to load doc from
     template -- The spec to start with and update as flask-swagger finds paths.
     """
@@ -189,29 +238,17 @@ def swagger(app, prefix=None, process_doc=_sanitize,
     output["paths"] = paths
     output["definitions"] = definitions
 
-    ignore_verbs = {"HEAD", "OPTIONS"}
-    # technically only responses is non-optional
-    optional_fields = ['tags', 'consumes', 'produces', 'schemes', 'security',
-                       'deprecated', 'operationId', 'externalDocs']
+    swagger_endpoints = url_parser(app, prefix)
+    for rule, methods in swagger_endpoints.items():
+        rule = rule_parser(rule)
 
-    for rule in app.url_map.iter_rules():
-        if prefix and rule.rule[:len(prefix)] != prefix:
-            continue
-        endpoint = app.view_functions[rule.endpoint]
-        methods = dict()
-        for verb in rule.methods.difference(ignore_verbs):
-            verb = verb.lower()
-            if hasattr(endpoint, 'methods') \
-                    and verb in map(lambda m: m.lower(), endpoint.methods) \
-                    and hasattr(endpoint.view_class, verb):
-                methods[verb] = getattr(endpoint.view_class, verb)
-            else:
-                methods[verb] = endpoint
         operations = dict()
-        for verb, method in methods.items():
-            summary, description, swag = _parse_docstring(method, process_doc,
+        for verb, method in methods:
+            summary, description, swag = _parse_docstring(method,
+                                                          process_doc,
                                                           from_file_keyword)
-            if swag is not None:  # we only add endpoints with swagger data in the docstrings
+            # Do we have docstring to parse?
+            if swag is not None:
                 defs = swag.get('definitions', [])
                 defs = _extract_definitions(defs)
                 params = swag.get('parameters', [])
@@ -236,14 +273,11 @@ def swagger(app, prefix=None, process_doc=_sanitize,
                 if len(params) > 0:
                     operation['parameters'] = params
                 # other optionals
-                for key in optional_fields:
+                for key in OPTIONAL_FIELDS:
                     if key in swag:
                         operation[key] = swag.get(key)
                 operations[verb] = operation
 
         if len(operations):
-            rule = str(rule)
-            for arg in re.findall('(<([^<>]*:)?([^<>]*)>)', rule):
-                rule = rule.replace(arg[0], '{%s}' % arg[2])
             paths[rule].update(operations)
     return output
