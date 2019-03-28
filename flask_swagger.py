@@ -75,7 +75,7 @@ def _parse_docstring(obj, process_doc, from_file_keyword):
                 other_lines = process_doc(
                     full_doc[line_feed + 1:line_feed + yaml_sep]
                 )
-                swag = yaml.load(full_doc[line_feed + yaml_sep:])
+                swag = yaml.load(full_doc[line_feed + yaml_sep:], Loader=yaml.FullLoader)
             else:
                 other_lines = process_doc(full_doc[line_feed + 1:])
         else:
@@ -113,7 +113,7 @@ def _extract_definitions(alist, level=None):
                     "import/" in schema.get("$ref")):
                 ref = schema.get("$ref")
                 # resolve local reference to python object
-                # "#/import:timeline.models.user.UserObject"
+                # "#/import/timeline.models.user.UserObject"
                 # process the import line
                 module_path = ref.split("import/")[1]
                 parts = module_path.split('.')

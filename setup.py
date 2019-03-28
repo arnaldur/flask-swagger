@@ -14,7 +14,7 @@ setup(name='flask-swagger',
       license='MIT',
       py_modules=['flask_swagger', 'build_swagger_spec'],
       long_description=long_description,
-      install_requires=['Flask>=0.10', 'PyYAML>=3.0'],
+      install_requires=['PyYAML>=3.0'],
       classifiers=[
         'Intended Audience :: Developers',
         'Operating System :: OS Independent',
@@ -25,25 +25,23 @@ setup(name='flask-swagger',
         'Programming Language :: Python :: 3.4',
         'Topic :: Software Development :: Libraries :: Python Modules',
       ],
-      entry_points = """
+      entry_points="""
       [console_scripts]
       flaskswagger = build_swagger_spec:run
       """,
       options={
-        'bdist_rpm':{
-          'build_requires':[
+        'bdist_rpm': {
+          'build_requires': [
             'python',
             'python-setuptools',
             'python-itsdangerous',
-            'python-flask',
             'python-markupsafe',
             'PyYAML',
           ],
-          'requires':[
+          'requires': [
             'python',
             'python-setuptools',
             'python-itsdangerous',
-            'python-flask',
             'python-markupsafe',
             'PyYAML',
           ],
