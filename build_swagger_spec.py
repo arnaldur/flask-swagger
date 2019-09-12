@@ -23,12 +23,12 @@ args = parser.parse_args()
 
 
 def run():
-    app = pkg_resources.EntryPoint.parse("x=%s" % args.app)
+    ep = pkg_resources.EntryPoint.parse("x=%s" % args.app)
 
-    if hasattr(app, "resolve"):
-        return app.resolve()
+    if hasattr(ep, "resolve"):
+        app = ep.resolve()
     else:
-        return app.load(False)
+        app = ep.load(False)
 
     # load the base template
     template = None
