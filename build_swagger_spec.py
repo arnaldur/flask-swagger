@@ -3,7 +3,7 @@ import sys
 import argparse
 import json
 import pkg_resources
-from flask_swagger import swagger
+from flask_swagger import swagger, quart_url_parser, flask_rule_parser, flask_url_parser
 
 sys.path.append(os.getcwd())
 
@@ -18,7 +18,7 @@ parser.add_argument("--definitions", default=None, help="json definitions file")
 parser.add_argument("--host", default=None)
 parser.add_argument("--base-path", default=None)
 parser.add_argument("--version", default=None, help="Specify a spec version")
-
+parser.add_argument("--framework", default=None, help="Specify framework")
 args = parser.parse_args()
 
 
@@ -45,7 +45,15 @@ def run():
                 for d in rawdefs.keys():
                     template["definitions"][d] = rawdefs[d]
 
-    spec = swagger(app, template=template)
+    rule_parser = flask_rule_parser
+    url_parser = flask_url_parser
+    if args.framework is not None:
+        if args.framework == "quart":
+            url_parser = quart_url_parser
+
+    spec = swagger(
+        app, template=template, url_parser=url_parser, rule_parser=rule_parser
+    )
 
     if args.host is not None:
         spec["host"] = args.host
